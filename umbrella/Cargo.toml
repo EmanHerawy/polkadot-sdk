@@ -84,6 +84,8 @@ std = [
 	"pallet-contracts-mock-network?/std",
 	"pallet-contracts?/std",
 	"pallet-conviction-voting?/std",
+	"pallet-conviction-voting-precompiles?/std",
+	"pallet-conviction-voting-precompiles-benchmarks?/std",
 	"pallet-core-fellowship?/std",
 	"pallet-delegated-staking?/std",
 	"pallet-democracy?/std",
@@ -280,6 +282,8 @@ runtime-benchmarks = [
 	"pallet-contracts-mock-network?/runtime-benchmarks",
 	"pallet-contracts?/runtime-benchmarks",
 	"pallet-conviction-voting?/runtime-benchmarks",
+	"pallet-conviction-voting-precompiles?/runtime-benchmarks",
+	"pallet-conviction-voting-precompiles-benchmarks?/runtime-benchmarks",
 	"pallet-core-fellowship?/runtime-benchmarks",
 	"pallet-delegated-staking?/runtime-benchmarks",
 	"pallet-democracy?/runtime-benchmarks",
@@ -420,6 +424,7 @@ try-runtime = [
 	"pallet-collective?/try-runtime",
 	"pallet-contracts?/try-runtime",
 	"pallet-conviction-voting?/try-runtime",
+	"pallet-conviction-voting-precompiles?/try-runtime",
 	"pallet-core-fellowship?/try-runtime",
 	"pallet-delegated-staking?/try-runtime",
 	"pallet-democracy?/try-runtime",
@@ -633,6 +638,8 @@ runtime-full = [
 	"pallet-contracts-proc-macro",
 	"pallet-contracts-uapi",
 	"pallet-conviction-voting",
+	"pallet-conviction-voting-precompiles",
+	"pallet-conviction-voting-precompiles-benchmarks",
 	"pallet-core-fellowship",
 	"pallet-delegated-staking",
 	"pallet-democracy",
@@ -1409,6 +1416,16 @@ path = "../substrate/frame/contracts/uapi"
 default-features = false
 optional = true
 path = "../substrate/frame/conviction-voting"
+
+[dependencies.pallet-conviction-voting-precompiles]
+default-features = false
+optional = true
+path = "../substrate/frame/conviction-voting/precompiles"
+
+[dependencies.pallet-conviction-voting-precompiles-benchmarks]
+default-features = false
+optional = true
+path = "../substrate/frame/conviction-voting/precompiles-benchmarks"
 
 [dependencies.pallet-core-fellowship]
 default-features = false

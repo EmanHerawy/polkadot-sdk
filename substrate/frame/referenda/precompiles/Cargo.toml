@@ -1,5 +1,5 @@
 [package]
-name = "referenda-precompiles"
+name = "pallet-referenda-precompiles"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -19,14 +19,19 @@ codec = { features = ["derive"], workspace = true }
 tracing = { workspace = true }
 
 frame-support = { workspace = true }
+frame-system = { workspace = true }
 pallet-revive = { workspace = true }
 pallet-referenda = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
 frame-system = { workspace = true, default-features = true }
 pallet-balances = { workspace = true, default-features = true }
+pallet-preimage = { workspace = true, default-features = true }
+pallet-scheduler = { workspace = true, default-features = true }
 pallet-timestamp = { workspace = true, default-features = true }
 polkadot-parachain-primitives = { workspace = true, default-features = true }
+scale-info = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 
@@ -37,8 +42,10 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
+	"pallet-preimage/std",
 	"pallet-revive/std",
 	"pallet-referenda/std",
+	"pallet-scheduler/std",
 	"pallet-timestamp/std",
 	"polkadot-parachain-primitives/std",
 	"scale-info/std",

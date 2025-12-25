@@ -7,38 +7,19 @@ use alloc::{boxed::Box, vec::Vec};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{fungible::Inspect, schedule::DispatchTime, Get, OriginTrait, StorePreimage},
+	traits::{fungible::Inspect, schedule::DispatchTime, Get, StorePreimage},
 };
 use frame_system::RawOrigin;
 use pallet_referenda::{BoundedCallOf, Pallet as Referenda, ReferendumCount, TracksInfo};
-use pallet_referenda_precompiles::IReferenda;
+use pallet_referenda_precompiles::{IReferenda, ReferendaPrecompile};
 use pallet_revive::{
-	precompiles::alloy::{hex, sol_types::SolInterface},
-	ExecConfig, ExecReturnValue, Weight, H160, U256,
+	precompiles::{
+		run::{precompile as run_precompile, CallSetup},
+	},
+	H160,
 };
 use scale_info::prelude::vec;
 use sp_runtime::traits::Saturating;
-
-fn call_precompile<T: Config<I>, I: 'static>(
-	from: T::AccountId,
-	encoded_call: Vec<u8>,
-) -> Result<ExecReturnValue, sp_runtime::DispatchError> {
-	let precompile_addr = H160::from(
-		hex::const_decode_to_array(b"00000000000000000000000000000000000B0000").unwrap(),
-	);
-
-	let result = pallet_revive::Pallet::<T>::bare_call(
-		<T as frame_system::Config>::RuntimeOrigin::signed(from),
-		precompile_addr,
-		U256::zero(),
-		Weight::MAX,
-		<T as pallet_revive::Config>::Currency::minimum_balance().saturating_mul(1000u32.into()),
-		encoded_call,
-		ExecConfig::new_substrate_tx(),
-	);
-
-	return result.result;
-}
 
 fn funded_mapped_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T::AccountId {
 	use frame_support::traits::fungible::Mutate;
@@ -95,16 +76,20 @@ mod benchmarks {
 
 	#[benchmark(pov_mode = Measured)]
 	fn submission_deposit() {
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
+		let call =
+			IReferenda::IReferendaCalls::submissionDeposit(IReferenda::submissionDepositCall {});
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::submissionDeposit(IReferenda::submissionDepositCall {})
-				.abi_encode();
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -116,21 +101,24 @@ mod benchmarks {
 		// Returns 0 immediately without track lookup
 		// Code path: match referendum_info { None => 0u128, Some(_) => 0u128 }
 
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
-
 		// Use a non-existent referendum index
 		let non_existent_index = 999u32;
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
-				referendumIndex: non_existent_index,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
+			referendumIndex: non_existent_index,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -143,7 +131,6 @@ mod benchmarks {
 		// Code path: Some(Ongoing(status)) where status.decision_deposit.is_none()
 		// Needs to: lookup referendum info, check deposit (None), lookup track info
 
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 		let submitter = funded_mapped_account::<T, ()>("submitter", 1);
 
 		// Create referendum WITHOUT decision deposit
@@ -154,16 +141,21 @@ mod benchmarks {
 		// 2. Check decision_deposit (None)
 		// 3. Lookup track info to get decision_deposit amount
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
-				referendumIndex: referendum_index,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
+			referendumIndex: referendum_index,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -175,7 +167,6 @@ mod benchmarks {
 		// Returns 0 without track lookup
 		// Code path: Some(Ongoing(status)) where status.decision_deposit.is_some() => 0u128
 
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 		let submitter = funded_mapped_account::<T, ()>("submitter", 1);
 		let depositor = funded_mapped_account::<T, ()>("depositor", 2);
 
@@ -195,16 +186,21 @@ mod benchmarks {
 		// 2. Check decision_deposit (Some) - returns 0
 		// No track lookup needed
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
-				referendumIndex: referendum_index,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::decisionDeposit(IReferenda::decisionDepositCall {
+			referendumIndex: referendum_index,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -213,7 +209,6 @@ mod benchmarks {
 	#[benchmark(pov_mode = Measured)]
 	fn submit_inline_best_case() {
 		// Best case: Empty queue, small proposal, simple origin
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 
 		// Simple origin (Root) - encode as PalletsOrigin
 		use pallet_referenda::PalletsOriginOf;
@@ -223,19 +218,24 @@ mod benchmarks {
 		// Small inline proposal (10 bytes)
 		let proposal_data = (0..10).map(|_| 0u8).collect::<Vec<_>>();
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::submitInline(IReferenda::submitInlineCall {
-				origin: encoded_origin.into(),
-				proposal: proposal_data.into(),
-				timing: IReferenda::Timing::AfterBlock,
-				enactmentMoment: 0u32,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::submitInline(IReferenda::submitInlineCall {
+			origin: encoded_origin.into(),
+			proposal: proposal_data.into(),
+			timing: IReferenda::Timing::AfterBlock,
+			enactmentMoment: 0u32,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -244,7 +244,6 @@ mod benchmarks {
 	#[benchmark(pov_mode = Measured)]
 	fn submit_inline_worst_case() {
 		// Worst case: Maximum proposal size (128 bytes)
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 
 		// Simple origin (Root) - encode as PalletsOrigin
 		use pallet_referenda::PalletsOriginOf;
@@ -254,19 +253,25 @@ mod benchmarks {
 		// Maximum inline proposal size (128 bytes)
 		let proposal_data = (0..128).map(|_| 0u8).collect::<Vec<_>>();
 
-		let encoded_call =
+		let call =
 			IReferenda::IReferendaCalls::submitInline(IReferenda::submitInlineCall {
 				origin: encoded_origin.into(),
 				proposal: proposal_data.into(),
 				timing: IReferenda::Timing::AfterBlock,
 				enactmentMoment: 0u32,
-			})
-			.abi_encode();
+			});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -275,7 +280,6 @@ mod benchmarks {
 	#[benchmark(pov_mode = Measured)]
 	fn submit_lookup_best_case() {
 		// Best case: Empty queue, simple origin, small preimage length
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 
 		// Simple origin (Root) - encode as PalletsOrigin
 		use pallet_referenda::PalletsOriginOf;
@@ -295,20 +299,25 @@ mod benchmarks {
 			bytes
 		});
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::submitLookup(IReferenda::submitLookupCall {
-				origin: encoded_origin.into(),
-				hash: hash_bytes.into(),
-				preimageLength: 100u32, // Small preimage length
-				timing: IReferenda::Timing::AfterBlock,
-				enactmentMoment: 0u32,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::submitLookup(IReferenda::submitLookupCall {
+			origin: encoded_origin.into(),
+			hash: hash_bytes.into(),
+			preimageLength: 100u32, // Small preimage length
+			timing: IReferenda::Timing::AfterBlock,
+			enactmentMoment: 0u32,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -317,7 +326,6 @@ mod benchmarks {
 	#[benchmark(pov_mode = Measured)]
 	fn submit_lookup_worst_case() {
 		// Worst case: Maximum preimage length parameter
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 
 		// Simple origin (Root) - encode as PalletsOrigin
 		use pallet_referenda::PalletsOriginOf;
@@ -340,20 +348,25 @@ mod benchmarks {
 		// Maximum preimage length (u32::MAX would be too large, use a large reasonable value)
 		let max_preimage_length = 1_000_000u32;
 
-		let encoded_call =
-			IReferenda::IReferendaCalls::submitLookup(IReferenda::submitLookupCall {
-				origin: encoded_origin.into(),
-				hash: hash_bytes.into(),
-				preimageLength: max_preimage_length,
-				timing: IReferenda::Timing::AfterBlock,
-				enactmentMoment: 0u32,
-			})
-			.abi_encode();
+		let call = IReferenda::IReferendaCalls::submitLookup(IReferenda::submitLookupCall {
+			origin: encoded_origin.into(),
+			hash: hash_bytes.into(),
+			preimageLength: max_preimage_length,
+			timing: IReferenda::Timing::AfterBlock,
+			enactmentMoment: 0u32,
+		});
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -362,21 +375,26 @@ mod benchmarks {
 	#[benchmark(pov_mode = Measured)]
 	fn place_decision_deposit_best_case() {
 		// Best case: Referendum in AwaitingDeposit phase (simple state)
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 		let submitter = funded_mapped_account::<T, ()>("submitter", 1);
 
 		// Create referendum WITHOUT decision deposit
 		let referendum_index = create_referendum_helper::<T, ()>(submitter);
 
-		let encoded_call = IReferenda::IReferendaCalls::placeDecisionDeposit(
+		let call = IReferenda::IReferendaCalls::placeDecisionDeposit(
 			IReferenda::placeDecisionDepositCall { referendumIndex: referendum_index },
-		)
-		.abi_encode();
+		);
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());
@@ -400,7 +418,6 @@ mod benchmarks {
 		//   1. env.charge() overhead (max weight calculation + gas meter update)
 		//   2. Actual pallet execution (BeginDecidingPassing/Failing branch)
 		// Users always pay max weight (~66M), but execution time varies by branch
-		let caller = funded_mapped_account::<T, ()>("caller", 0);
 		let submitter = funded_mapped_account::<T, ()>("submitter", 1);
 
 		use pallet_referenda::Pallet as Referenda;
@@ -421,15 +438,21 @@ mod benchmarks {
 
 		// Now place deposit - this will trigger service_referendum which will
 		// result in BeginDecidingPassing or BeginDecidingFailing branch (most complex)
-		let encoded_call = IReferenda::IReferendaCalls::placeDecisionDeposit(
+		let call = IReferenda::IReferendaCalls::placeDecisionDeposit(
 			IReferenda::placeDecisionDepositCall { referendumIndex: referendum_index },
-		)
-		.abi_encode();
+		);
+
+		let mut call_setup = CallSetup::<T>::default();
+		let (mut ext, _) = call_setup.ext();
 
 		let result;
 		#[block]
 		{
-			result = call_precompile::<T, ()>(caller, encoded_call);
+			result = run_precompile::<ReferendaPrecompile<T>, _>(
+				&mut ext,
+				H160::from_low_u64_be(0xB0000).as_fixed_bytes(),
+				&call,
+			);
 		}
 
 		assert!(result.is_ok());

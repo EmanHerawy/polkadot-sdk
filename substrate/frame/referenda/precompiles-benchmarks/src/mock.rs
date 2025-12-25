@@ -3,9 +3,10 @@
 use pallet_referenda_precompiles::ReferendaPrecompile;
 
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
-use frame_support::pallet_prelude::TypeInfo;
 use frame_support::{
-	derive_impl, ord_parameter_types, parameter_types,
+	derive_impl, ord_parameter_types,
+	pallet_prelude::TypeInfo,
+	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OriginTrait, VoteTally},
 	weights::Weight,
 };
